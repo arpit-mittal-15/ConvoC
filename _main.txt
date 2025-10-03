@@ -1,0 +1,5 @@
+socket(AF_INET, SOCK_STREAM, 0);  --> takes 3 integers as input and gives an int as output.
+
+AF_INET     = IPv4                AF_INET6 = IPv6
+SOCK_STREAM = TCP                 SOCK_DGRAM = UDP
+0           = protocol number     IPPROTO_ICMP = for raw ICMP sockets, like ping
