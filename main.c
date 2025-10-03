@@ -1,36 +1,71 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <arpa/inet.h>
 #include "mylib.h"
 
-int main(){
+void *receiveMessages(void *arg)
+{
+  int sock = *(int *)arg;
+  char buffer[1024];
+  while (1)
+  {
+    int len = recv(sock, buffer, sizeof(buffer) - 1, 0);
+    if (len <= 0)
+      break;
+    buffer[len] = '\0';
+    printf("%s", buffer);
+  }
+  return NULL;
+}
 
+int main()
+{
   int socketFD = createTCPIPv4Socket();
   struct sockaddr_in *address = createIPv4Address("127.0.0.1", 2000);
 
-  int result = connect(socketFD, (struct sockaddr*)address, sizeof *address);
-
-  if(result == 0)
-    printf("Connection was successful\n");
+  if (connect(socketFD, (struct sockaddr *)address, sizeof(*address)) == 0)
+    printf("Connected to server!\n");
   else
-    perror("not successful\n");
+  {
+    perror("Connection failed");
+    return 1;
+  }
 
-  
   char *line = NULL;
   size_t lineSize = 0;
 
-  printf("type and we will send(type exit)...\n");
+  // Send name
+  printf("Enter your name: ");
+  ssize_t charCount = getline(&line, &lineSize, stdin);
+  send(socketFD, line, charCount, 0);
 
-  while(true){
-    ssize_t charCount = getline(&line, &lineSize, stdin);
+  // Send room
+  printf("Enter room number: ");
+  charCount = getline(&line, &lineSize, stdin);
+  send(socketFD, line, charCount, 0);
 
-    if(charCount > 0){
-      if(strcmp(line, "exit\n") == 0)
+  // Start receiving messages
+  pthread_t recvThread;
+  pthread_create(&recvThread, NULL, receiveMessages, &socketFD);
+
+  // Chat loop
+  while (true)
+  {
+    charCount = getline(&line, &lineSize, stdin);
+    if (charCount > 0)
+    {
+      if (strcmp(line, "exit\n") == 0)
+      {
+        send(socketFD, line, charCount, 0);
         break;
-
-        ssize_t amountWasSend = send(socketFD, line, charCount, 0);
+      }
+      send(socketFD, line, charCount, 0);
     }
   }
 
+  close(socketFD);
   return 0;
 }

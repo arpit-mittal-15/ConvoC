@@ -1,6 +1,8 @@
 {
   "files.associations": {
     "*.ejs": "html",
-    "socket.h": "c"
+    "socket.h": "c",
+    "__config": "c",
+    "locale": "c"
   }
 }
