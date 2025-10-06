@@ -12,13 +12,14 @@
 #include <openssl/evp.h>
 
 #define MAX_CLIENTS 100
-#define BUFFER_SIZE 2048
+#define BUFFER_SIZE 4096
 
 struct Client
 {
   int socketFD;
   char name[50];
   int room;
+  int pfp[5]; // profile picture array
 };
 
 struct Client *clients[MAX_CLIENTS];
@@ -70,18 +71,21 @@ void sendWebSocketMessage(int clientFD, const char *message)
   send(clientFD, message, len, 0);
 }
 
-// Broadcast message to clients in the same room
+// Broadcast message to all clients in the same room (including sender)
 void broadcastMessage(struct Client *sender, const char *message)
 {
   pthread_mutex_lock(&clientsMutex);
   for (int i = 0; i < MAX_CLIENTS; i++)
   {
-    if (clients[i] && clients[i] != sender && clients[i]->room == sender->room)
+    if (clients[i] && clients[i]->room == sender->room)
     {
       sendWebSocketMessage(clients[i]->socketFD, message);
     }
   }
   pthread_mutex_unlock(&clientsMutex);
+
+  // Print the broadcasted message on the server console
+  printf("[Broadcast] %s\n", message);
 }
 
 // Decode WebSocket frame
@@ -96,13 +100,11 @@ void decodeWebSocketFrame(int clientFD, char *buffer, int *outLen)
   }
 
   int payloadLen = header[1] & 0x7F;
-  int maskOffset = 2;
   if (payloadLen == 126)
   {
     unsigned char ext[2];
     recv(clientFD, ext, 2, 0);
     payloadLen = (ext[0] << 8) | ext[1];
-    maskOffset += 2;
   }
   else if (payloadLen == 127)
   {
@@ -111,7 +113,6 @@ void decodeWebSocketFrame(int clientFD, char *buffer, int *outLen)
     payloadLen = 0;
     for (int i = 0; i < 8; i++)
       payloadLen = (payloadLen << 8) | ext[i];
-    maskOffset += 8;
   }
 
   unsigned char mask[4];
@@ -128,9 +129,8 @@ void decodeWebSocketFrame(int clientFD, char *buffer, int *outLen)
   }
 
   for (int i = 0; i < payloadLen; i++)
-  {
     buffer[i] = data[i] ^ mask[i % 4];
-  }
+
   buffer[payloadLen] = '\0';
   *outLen = payloadLen;
 }
@@ -167,6 +167,26 @@ void performWebSocketHandshake(int clientFD, char *buffer)
   send(clientFD, response, strlen(response), 0);
 }
 
+// Parse pfp array from string "[1,2,3,4,5]"
+void parsePFP(const char *str, int pfp[5])
+{
+  int count = 0;
+  const char *p = str;
+  while (*p && count < 5)
+  {
+    if (*p >= '0' && *p <= '9')
+    {
+      pfp[count++] = atoi(p);
+      while (*p >= '0' && *p <= '9')
+        p++;
+    }
+    else
+      p++;
+  }
+  for (int i = count; i < 5; i++)
+    pfp[i] = 0;
+}
+
 // Handle individual client
 void *handleClient(void *arg)
 {
@@ -174,35 +194,47 @@ void *handleClient(void *arg)
   char buffer[BUFFER_SIZE];
   int n;
 
-  // 1. Handshake
+  // Handshake
   n = recv(cli->socketFD, buffer, sizeof(buffer) - 1, 0);
   if (n <= 0)
     goto CLEANUP;
   buffer[n] = '\0';
   performWebSocketHandshake(cli->socketFD, buffer);
 
-  // 2. Receive join JSON immediately
+  // Receive join JSON: {"type":"join","name":"Arpit","room":"1","pfp":[1,2,3,4,5]}
   decodeWebSocketFrame(cli->socketFD, buffer, &n);
   if (n <= 0)
     goto CLEANUP;
 
-  // Expect: {"type":"join","name":"xxx","room":"1"}
-  sscanf(buffer, "{\"type\":\"join\",\"name\":\"%[^\"]\",\"room\":\"%d\"}", cli->name, &cli->room);
+  sscanf(buffer,
+         "{\"type\":\"join\",\"name\":\"%[^\"]\",\"room\":\"%d\",\"pfp\":[%[^]]]}",
+         cli->name, &cli->room, buffer); // temporarily reuse buffer for pfp string
+  parsePFP(buffer, cli->pfp);
 
-  // 3. Broadcast join announcement immediately
-  sprintf(buffer, "{\"type\":\"join\",\"name\":\"%s\",\"room\":\"%d\"} joined room %d\n", cli->name, cli->room, cli->room);
+  // Broadcast join
+  sprintf(buffer,
+          "{\"type\":\"join\",\"name\":\"%s\",\"room\":\"%d\",\"pfp\":[%d,%d,%d,%d,%d]}",
+          cli->name, cli->room,
+          cli->pfp[0], cli->pfp[1], cli->pfp[2], cli->pfp[3], cli->pfp[4]);
   broadcastMessage(cli, buffer);
 
-  // 4. Chat loop
+  // Chat loop
   while (true)
   {
     decodeWebSocketFrame(cli->socketFD, buffer, &n);
     if (n <= 0)
       break;
 
-    char message[BUFFER_SIZE];
-    sprintf(message, "[%s]: %s", cli->name, buffer);
-    broadcastMessage(cli, message);
+    // Expect: {"type":"message","text":"hello"}
+    char text[BUFFER_SIZE];
+    sscanf(buffer, "{\"type\":\"message\",\"text\":\"%[^\"]\"}", text);
+
+    sprintf(buffer,
+            "{\"type\":\"message\",\"name\":\"%s\",\"text\":\"%s\",\"room\":\"%d\",\"pfp\":[%d,%d,%d,%d,%d]}",
+            cli->name, text, cli->room,
+            cli->pfp[0], cli->pfp[1], cli->pfp[2], cli->pfp[3], cli->pfp[4]);
+
+    broadcastMessage(cli, buffer);
   }
 
 CLEANUP:
@@ -218,7 +250,11 @@ CLEANUP:
   }
   pthread_mutex_unlock(&clientsMutex);
 
-  sprintf(buffer, "%s left room %d\n", cli->name, cli->room);
+  // Broadcast leave
+  sprintf(buffer,
+          "{\"type\":\"leave\",\"name\":\"%s\",\"room\":\"%d\",\"pfp\":[%d,%d,%d,%d,%d]}",
+          cli->name, cli->room,
+          cli->pfp[0], cli->pfp[1], cli->pfp[2], cli->pfp[3], cli->pfp[4]);
   broadcastMessage(cli, buffer);
   free(cli);
   return NULL;
@@ -251,6 +287,7 @@ int main()
       continue;
 
     struct Client *cli = malloc(sizeof(struct Client));
+    memset(cli, 0, sizeof(struct Client));
     cli->socketFD = clientFD;
 
     pthread_mutex_lock(&clientsMutex);
