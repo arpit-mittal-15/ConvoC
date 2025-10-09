@@ -8,7 +8,18 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { LogOut, Send, Users } from "lucide-react";
+import {
+  ArrowBigLeft,
+  ArrowLeft,
+  ArrowLeftIcon,
+  ChevronLeft,
+  ChevronRight,
+  FlagTriangleLeft,
+  LogOut,
+  LucideArrowLeft,
+  Send,
+  Users,
+} from "lucide-react";
 
 type JoinMessage = {
   type: "join";
@@ -100,7 +111,7 @@ export default function App() {
       }
 
       if (parsed && parsed.room === selectedRoom) {
-        console.log("parsed:", parsed)
+        console.log("parsed:", parsed);
         setMessages((prev) => [...prev, parsed]);
       }
     };
@@ -203,10 +214,73 @@ export default function App() {
                     className="mb-6"
                   />
 
-                  <h3 className="text-lg font-semibold mb-2">
-                    Choose 5 integers
+                  <h3 className="text-2xl font-bold mb-4">
+                    Choose your avatar
                   </h3>
-                  <div className="grid grid-cols-5 gap-2 mb-6">
+                  <div className="flex justify-center items-center mt-10 gap-6">
+                    <div className="flex flex-col gap-2">
+                      <ChevronLeft
+                        onClick={() => {
+                          setNumbers((prev) => {
+                            const updated = [...prev];
+                            updated[1] = (updated[1] - 1 + 27) % 27;
+                            return updated;
+                          });
+                        }}
+                      />
+                      <ChevronLeft
+                        onClick={() => {
+                          setNumbers((prev) => {
+                            const updated = [...prev];
+                            updated[2] = (updated[2] - 1 + 57) % 57;
+                            return updated;
+                          });
+                        }}
+                      />
+                      <ChevronLeft
+                        onClick={() => {
+                          setNumbers((prev) => {
+                            const updated = [...prev];
+                            updated[3] = (updated[3] - 1 + 51) % 51;
+                            return updated;
+                          });
+                        }}
+                      />
+                    </div>
+                    <div className="h-30 w-30 relative">
+                      <Avatar arr={numbers} />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <ChevronRight
+                        onClick={() => {
+                          setNumbers((prev) => {
+                            const updated = [...prev];
+                            updated[1] = (updated[1] + 1) % 27;
+                            return updated;
+                          });
+                        }}
+                      />
+                      <ChevronRight
+                        onClick={() => {
+                          setNumbers((prev) => {
+                            const updated = [...prev];
+                            updated[2] = (updated[2] + 1) % 57;
+                            return updated;
+                          });
+                        }}
+                      />
+                      <ChevronRight
+                        onClick={() => {
+                          setNumbers((prev) => {
+                            const updated = [...prev];
+                            updated[3] = (updated[3] + 1) % 51;
+                            return updated;
+                          });
+                        }}
+                      />
+                    </div>
+                  </div>
+                  {/* <div className="grid grid-cols-5 gap-2 mb-6">
                     {numbers.map((num, i) => (
                       <Input
                         key={i}
@@ -223,7 +297,7 @@ export default function App() {
                         className="text-center"
                       />
                     ))}
-                  </div>
+                  </div> */}
                 </div>
 
                 <DialogFooter className="flex justify-end gap-2 mt-4">
@@ -233,7 +307,7 @@ export default function App() {
                   >
                     Cancel
                   </Button>
-                  <Button onClick={connect}>Join</Button>
+                  <Button onClick={connect} className="bg-green-500 px-8 text-white">Join</Button>
                 </DialogFooter>
               </div>
             </DialogContent>
@@ -272,9 +346,9 @@ export default function App() {
               const sender = msg.name || "";
               const text = msg.text || "";
               const isOwn = sender === name;
-              const nums = Array.isArray(msg.numbers)
-                ? msg.numbers.join(", ")
-                : "";
+              const pfp = msg.pfp || [0,0,0,0,0];
+
+              const avatar = <Avatar arr={pfp} />
 
               if (type === "join" || type === "leave") {
                 return (
@@ -283,8 +357,8 @@ export default function App() {
                     className="text-center text-gray-500 text-sm italic animate-fade-in"
                   >
                     {type === "join"
-                      ? `${sender} joined the room (${nums})`
-                      : `${sender} left the room (${nums})`}
+                      ? `${sender} joined the room`
+                      : `${sender} left the room`}
                   </div>
                 );
               }
@@ -303,12 +377,13 @@ export default function App() {
                       } max-w-[75%]`}
                     >
                       {!isOwn && (
-                        <span className="text-xs font-medium text-gray-700 mb-1 px-1">
-                          {sender} ({nums})
-                        </span>
+                        <div className="flex text-sm font-medium text-gray-700 mb-1 px-1 gap-2">
+                          <div className="h-5 w-5 relative">{avatar}</div>
+                          {sender}
+                        </div>
                       )}
                       <div
-                        className={`px-4 py-2.5 rounded-2xl ${
+                        className={`ml-8 px-4 py-2.5 rounded-2xl ${
                           isOwn
                             ? "bg-blue-600 text-white rounded-tr-sm"
                             : "bg-gray-100 text-gray-900 rounded-tl-sm"
@@ -316,7 +391,7 @@ export default function App() {
                       >
                         <p className="text-sm leading-relaxed">{text}</p>
                       </div>
-                      <span className="text-xs text-gray-400 mt-1 px-1">
+                      <span className="ml-8 text-xs text-gray-400 mt-1 px-1">
                         {new Date().toLocaleTimeString([], {
                           hour: "2-digit",
                           minute: "2-digit",
@@ -352,3 +427,35 @@ export default function App() {
     </div>
   );
 }
+
+const Avatar = ({ arr }: { arr: number[] }) => {
+  console.log("array: ", arr[1]);
+
+  const colorX = Math.floor(arr[1] % 10);
+  const colorY = Math.floor(arr[1] / 10);
+
+  const eyesX = Math.floor(arr[2] % 10);
+  const eyesY = Math.floor(arr[2] / 10);
+
+  const mouthX = Math.floor(arr[3] % 10);
+  const mouthY = Math.floor(arr[3] / 10);
+
+  console.log(`${colorX * 100}% ${colorY * 100}%`);
+
+  return (
+    <>
+      <div
+        className={`h-full w-full absolute bg-[url(../public/color_atlas.gif)] bg-size-[1000%] `}
+        style={{ backgroundPosition: `-${colorX * 100}% -${colorY * 100}%` }}
+      />
+      <div
+        className={`h-full w-full absolute bg-[url(../public/eyes_atlas.gif)] bg-size-[1000%] `}
+        style={{ backgroundPosition: `-${eyesX * 100}% -${eyesY * 100}%` }}
+      />
+      <div
+        className="h-full w-full absolute bg-[url(../public/mouth_atlas.gif)] bg-size-[1000%]"
+        style={{ backgroundPosition: `-${mouthX * 100}% -${mouthY * 100}%` }}
+      />
+    </>
+  );
+};
